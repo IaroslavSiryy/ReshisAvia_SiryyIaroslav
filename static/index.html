@@ -1,206 +1,473 @@
-<!DOCTYPE html>
-<html lang="ru" class="">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Решись Авиа</title>
-    <link rel="icon" type="image/png" href="logo.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.2/dist/apexcharts.min.js"></script>
-    <style>
-        body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #F4F4F4; transition: background-color 0.3s; }
-        .dark body { background-color: #111827; color: #F4F4F4; }
+let chartInstance = null;
+let modalChart = null;
+let currentData = null;
+let selectedCity = "";
+let selectedDate = "";
+let debounceTimer = null;
 
-        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08); z-index: 10; position: relative; transition: background 0.3s; }
-        .dark .glass-panel { background: rgba(31, 41, 55, 0.9); border: 1px solid rgba(75, 85, 99, 0.6); box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5); }
+// ==== КАСТОМНОЕ ОКНО УВЕДОМЛЕНИЙ ====
+let modalAction = null;
 
-        .step { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; display: flex; flex-direction: column; height: 100%; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+function showInfoModal(title, message, action = null) {
+    document.getElementById('infoModalTitle').innerText = title;
+    document.getElementById('infoModalMessage').innerText = message;
+    modalAction = action;
 
-        .btn-premium { background: linear-gradient(135deg, #facc15 0%, #f59e0b 100%); transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(250, 204, 21, 0.4); color: #000000 !important; font-weight: 800; }
-        .btn-premium:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(250, 204, 21, 0.6); }
+    const modal = document.getElementById('infoModal');
+    const content = document.getElementById('infoModalContent');
 
-        .city-card { background: #ffffff; border: 2px solid transparent; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; position: relative; display: flex; flex-direction: column; height: 100%; }
-        .dark .city-card { background: #1f2937; }
-        .city-card:hover { border-color: #facc15; transform: translateY(-4px); box-shadow: 0 12px 25px rgba(250, 204, 21, 0.2); }
-        .city-img-wrapper { flex: 1; min-height: 0; overflow: hidden; position: relative; background: #e5e7eb; }
-        .dark .city-img-wrapper { background: #374151; }
-        .city-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
-        .city-card:hover .city-img { transform: scale(1.08); }
-        .custom-slider { -webkit-appearance: none; appearance: none; height: 14px; background: #e5e7eb; border-radius: 8px; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
-        .dark .custom-slider { background: #374151; }
-        .custom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 36px; height: 36px; border-radius: 50%; background: #ffffff; cursor: grab; box-shadow: 0 0 15px rgba(250, 204, 21, 0.8), 0 4px 10px rgba(0,0,0,0.1); border: 4px solid #facc15; transition: transform 0.1s, box-shadow 0.1s; }
-        .custom-slider::-webkit-slider-thumb:hover { transform: scale(1.15); box-shadow: 0 0 25px rgba(250, 204, 21, 1), 0 6px 15px rgba(0,0,0,0.15); }
+    // Показываем контейнер
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 
-        .breadcrumb-item { padding: 6px 16px; border-radius: 20px; transition: all 0.2s; }
-        .breadcrumb-item.active { background: #facc15; color: #000000 !important; font-weight: 700; box-shadow: 0 2px 10px rgba(250, 204, 21, 0.3); }
-        .breadcrumb-item.clickable:hover { background: #e5e7eb; color: #000; }
-        .dark .breadcrumb-item.clickable:hover { background: #374151; color: #fff; }
+    // Запускаем анимацию увеличения
+    setTimeout(() => {
+        content.classList.remove('scale-90');
+        content.classList.add('scale-100');
+    }, 10);
+}
 
-        .modal-backdrop { backdrop-filter: blur(8px); background: rgba(0, 0, 0, 0.5); }
-        .hidden { display: none !important; }
+function closeInfoModal() {
+    const modal = document.getElementById('infoModal');
+    const content = document.getElementById('infoModalContent');
 
-        .toast { opacity: 0; transform: translateY(20px) scale(0.9); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: auto; }
-        .toast.show { opacity: 1; transform: translateY(0) scale(1); }
+    // Анимация уменьшения
+    content.classList.remove('scale-100');
+    content.classList.add('scale-90');
 
-        #auth-view { position: relative; overflow: hidden; background-color: #F4F4F4; transition: background-color 0.3s; }
-        .dark #auth-view { background-color: #111827; }
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
 
-        .bg-plane { position: absolute; z-index: 0; opacity: 0.15; filter: blur(3px); pointer-events: none; }
-        .dark .bg-plane { opacity: 0.05; }
-        .plane-1 { width: 250px; top: 10%; left: -300px; animation: flyRight 30s linear infinite; }
-        .plane-2 { width: 150px; top: 60%; right: -200px; transform: rotate(180deg); animation: flyLeft 25s linear infinite; animation-delay: 5s; filter: blur(5px); opacity: 0.1; }
-        .plane-3 { width: 350px; bottom: 10%; left: -400px; animation: flyDiagonal 40s linear infinite; filter: blur(8px); opacity: 0.05; }
-        @keyframes flyRight { 0% { left: -300px; top: 10%; transform: rotate(5deg); } 100% { left: 110%; top: 15%; transform: rotate(5deg); } }
-        @keyframes flyLeft { 0% { right: -200px; top: 60%; transform: rotate(175deg); } 100% { right: 110%; top: 55%; transform: rotate(175deg); } }
-        @keyframes flyDiagonal { 0% { left: -400px; bottom: 5%; transform: rotate(-15deg); } 100% { left: 110%; bottom: 25%; transform: rotate(-15deg); } }
-    </style>
-</head>
-<body class="text-gray-800 dark:text-gray-100 h-screen flex flex-col">
+        if (modalAction) {
+            modalAction();
+            modalAction = null;
+        }
+    }, 300);
+}
 
-    <!-- ЭКРАН ВХОДА -->
-    <div id="auth-view" class="flex items-center justify-center h-full p-4 overflow-y-auto">
-        <img src="https://cdn-icons-png.flaticon.com/512/7893/7893979.png" class="bg-plane plane-1" alt="">
-        <img src="https://cdn-icons-png.flaticon.com/512/7893/7893979.png" class="bg-plane plane-2" alt="">
-        <img src="https://cdn-icons-png.flaticon.com/512/7893/7893979.png" class="bg-plane plane-3" alt="">
+// ==== ТЕМНАЯ ТЕМА ====
+function updateThemeButtons() {
+    const isDark = document.documentElement.classList.contains('dark');
+    document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
+        btn.innerText = isDark ? '☀️' : '🌙';
+    });
+}
 
-        <button onclick="toggleTheme()" class="theme-toggle-btn absolute top-6 right-6 bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg hover:scale-110 transition-transform text-2xl z-50" title="Сменить тему">🌙</button>
+function initTheme() {
+    const isDark = localStorage.getItem('theme') === 'dark';
+    if (isDark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    updateThemeButtons();
+}
 
-        <div class="glass-panel p-8 rounded-3xl w-full max-w-md text-center">
-            <div class="flex items-center justify-center mb-8">
-                <img src="logo.png" alt="Решись Авиа" class="w-64 object-contain rounded-xl">
-            </div>
-            <div class="flex bg-gray-200/50 dark:bg-gray-700/50 rounded-xl p-1 mb-8 relative">
-                <button id="tab-login" onclick="switchTab('login')" class="flex-1 py-3 rounded-lg font-bold text-lg bg-white dark:bg-gray-800 shadow-sm z-10 transition-all">Вход</button>
-                <button id="tab-reg" onclick="switchTab('register')" class="flex-1 py-3 rounded-lg font-medium text-lg text-gray-500 dark:text-gray-400 z-10 transition-all">Регистрация</button>
-            </div>
-            <form id="login-form" class="flex flex-col gap-4">
-                <input type="text" id="login-username" placeholder="Логин" required class="w-full p-4 bg-white/70 dark:bg-gray-800/70 border-2 border-transparent focus:border-yellow-400 rounded-xl text-lg outline-none transition-all shadow-sm text-gray-900 dark:text-white">
-                <input type="password" id="login-password" placeholder="Пароль" required class="w-full p-4 bg-white/70 dark:bg-gray-800/70 border-2 border-transparent focus:border-yellow-400 rounded-xl text-lg outline-none transition-all shadow-sm text-gray-900 dark:text-white">
-                <button type="submit" class="btn-premium w-full py-4 rounded-xl text-xl mt-2 text-black">Войти</button>
-            </form>
-            <form id="register-form" class="hidden flex-col gap-4">
-                <input type="text" id="reg-code" placeholder="Код сотрудника" required class="w-full p-4 bg-white/70 dark:bg-gray-800/70 border-2 border-transparent focus:border-yellow-400 rounded-xl text-lg outline-none transition-all shadow-sm text-gray-900 dark:text-white">
-                <input type="text" id="reg-username" placeholder="Логин" required class="w-full p-4 bg-white/70 dark:bg-gray-800/70 border-2 border-transparent focus:border-yellow-400 rounded-xl text-lg outline-none transition-all shadow-sm text-gray-900 dark:text-white">
-                <input type="password" id="reg-password" placeholder="Пароль" required class="w-full p-4 bg-white/70 dark:bg-gray-800/70 border-2 border-transparent focus:border-yellow-400 rounded-xl text-lg outline-none transition-all shadow-sm text-gray-900 dark:text-white">
-                <button type="submit" class="btn-premium w-full py-4 rounded-xl text-xl mt-2 text-black">Зарегистрироваться</button>
-            </form>
-            <p id="auth-error" class="text-red-500 font-medium mt-4"></p>
-        </div>
-    </div>
+function toggleTheme() {
+    document.documentElement.classList.toggle('dark');
+    const isDark = document.documentElement.classList.contains('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    updateThemeButtons();
 
-    <!-- ГЛАВНЫЙ ЭКРАН -->
-    <div id="main-view" class="hidden flex-col h-full w-full">
-        <header class="py-4 px-8 flex justify-between items-center shrink-0">
-            <div class="flex items-center"><img src="logo.png" alt="Решись Авиа" class="h-12 w-auto object-contain rounded-lg"></div>
-            <div class="flex items-center gap-4">
-                <button onclick="toggleTheme()" class="theme-toggle-btn bg-white dark:bg-gray-800 p-2.5 rounded-xl shadow-sm hover:scale-110 transition-transform text-2xl" title="Сменить тему">🌙</button>
-                <button onclick="logout()" class="bg-white dark:bg-gray-800 px-6 py-2 rounded-xl text-base font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Выйти</button>
-            </div>
-        </header>
+    if (currentData) {
+        setTimeout(() => {
+            renderChart(currentData, 'demandChart', false);
+            if (!document.getElementById('chartModal').classList.contains('hidden')) {
+                renderChart(currentData, 'fullChart', true);
+            }
+        }, 100);
+    }
+}
+initTheme();
 
-        <div class="px-8 pb-2 flex items-center gap-2 text-lg font-medium shrink-0">
-            <span id="bc-1" class="breadcrumb-item active" onclick="goToStep(1)">1. Город</span>
-            <span id="bc-arrow-1" class="hidden text-gray-400">→</span>
-            <span id="bc-2" class="breadcrumb-item hidden" onclick="goToStep(2)">2. Дата</span>
-            <span id="bc-arrow-2" class="hidden text-gray-400">→</span>
-            <span id="bc-3" class="breadcrumb-item hidden">3. Прогноз</span>
-        </div>
+// ==== КАРТИНКИ ====
+const cityImages = {
+    "Сочи": "sochi.jpg",
+    "Санкт-Петербург": "spb.jpg",
+    "Калининград": "kg.jpg",
+    "Новосибирск": "nv.jpg",
+    "Минеральные Воды": "mrv.jpg"
+};
 
-        <div class="flex-1 p-6 overflow-hidden">
-            <div class="glass-panel p-6 rounded-3xl w-full h-full flex flex-col max-w-[1600px] mx-auto">
+// ==== УВЕДОМЛЕНИЯ ====
+function showToast(message, isError = false) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl font-bold text-lg ${
+        isError ? 'bg-red-50 border-2 border-red-200 text-red-900' : 'bg-yellow-400 border-2 border-yellow-500 text-black'
+    }`;
+    toast.innerHTML = `<span class="text-2xl">${isError ? '❌' : '✨'}</span> <span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
 
-                <div id="step1" class="step">
-                    <h2 class="text-3xl font-extrabold mb-1">Куда летим?</h2>
-                    <p class="text-gray-500 dark:text-gray-400 mb-6 text-lg font-medium">Вылет только из Москвы</p>
-                    <div id="cities-list" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 flex-1 auto-rows-fr"></div>
+function updateBreadcrumbs(step) {
+    ['bc-1', 'bc-2', 'bc-3'].forEach(id => {
+        const el = document.getElementById(id);
+        el.className = 'breadcrumb-item hidden text-gray-500 dark:text-gray-400';
+    });
+    const bc1 = document.getElementById('bc-1');
+    bc1.classList.remove('hidden');
+    if (step === 1) { bc1.classList.add('active'); bc1.classList.remove('text-gray-500', 'dark:text-gray-400'); } else bc1.classList.add('clickable');
+
+    if (step >= 2) {
+        const bc2 = document.getElementById('bc-2');
+        bc2.classList.remove('hidden');
+        if (step === 2) { bc2.classList.add('active'); bc2.classList.remove('text-gray-500', 'dark:text-gray-400'); } else bc2.classList.add('clickable');
+        document.getElementById('bc-arrow-1').classList.remove('hidden');
+    } else {
+        document.getElementById('bc-arrow-1').classList.add('hidden');
+    }
+
+    if (step >= 3) {
+        const bc3 = document.getElementById('bc-3');
+        bc3.classList.remove('hidden');
+        bc3.classList.add('active');
+        bc3.classList.remove('text-gray-500', 'dark:text-gray-400');
+        document.getElementById('bc-arrow-2').classList.remove('hidden');
+    } else {
+        document.getElementById('bc-arrow-2').classList.add('hidden');
+    }
+}
+
+function goToStep(num) {
+    document.querySelectorAll('.step').forEach(el => el.classList.add('hidden'));
+    document.getElementById('step' + num).classList.remove('hidden');
+    updateBreadcrumbs(num);
+    if (num === 3 && currentData) {
+        setTimeout(() => {
+            if (!document.getElementById('step3').classList.contains('hidden')) {
+                renderChart(currentData, 'demandChart', false);
+            }
+        }, 50);
+    }
+}
+
+function switchTab(tab) {
+    const lf = document.getElementById('login-form'), rf = document.getElementById('register-form');
+    const tl = document.getElementById('tab-login'), tr = document.getElementById('tab-reg');
+    if (tab === 'login') {
+        lf.className = 'flex flex-col gap-4'; rf.className = 'hidden flex-col gap-4';
+        tl.className = 'flex-1 py-3 rounded-lg font-bold text-lg bg-white dark:bg-gray-800 shadow-sm z-10 transition-all';
+        tr.className = 'flex-1 py-3 rounded-lg font-medium text-lg text-gray-500 dark:text-gray-400 z-10 transition-all';
+    } else {
+        lf.className = 'hidden flex-col gap-4'; rf.className = 'flex flex-col gap-4';
+        tr.className = 'flex-1 py-3 rounded-lg font-bold text-lg bg-white dark:bg-gray-800 shadow-sm z-10 transition-all';
+        tl.className = 'flex-1 py-3 rounded-lg font-medium text-lg text-gray-500 dark:text-gray-400 z-10 transition-all';
+    }
+    document.getElementById('auth-error').innerText = '';
+}
+
+function showAuth() {
+    document.getElementById('auth-view').classList.remove('hidden');
+    document.getElementById('main-view').classList.add('hidden');
+    document.getElementById('main-view').classList.remove('flex');
+}
+
+async function showMain() {
+    document.getElementById('auth-view').classList.add('hidden');
+    document.getElementById('main-view').classList.remove('hidden');
+    document.getElementById('main-view').classList.add('flex');
+    goToStep(1);
+    await loadCities();
+}
+
+function logout() { localStorage.removeItem('token'); showAuth(); }
+
+async function loadCities() {
+    const list = document.getElementById('cities-list');
+    list.innerHTML = '<p class="text-gray-400 font-medium col-span-full">Загрузка...</p>';
+    try {
+        const res = await fetch('/api/cities');
+        const cities = await res.json();
+        list.innerHTML = '';
+        cities.forEach(city => {
+            const imgUrl = cityImages[city] || "";
+            const btn = document.createElement('button');
+            btn.className = 'city-card rounded-2xl text-left flex flex-col';
+            btn.innerHTML = `
+                <div class="w-full city-img-wrapper">
+                    <img src="${imgUrl}" alt="${city}" class="city-img">
                 </div>
-
-                <div id="step2" class="step hidden">
-                    <button onclick="goToStep(1)" class="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white mb-2 font-bold flex items-center gap-2 w-max transition-colors">← Назад к городам</button>
-                    <h2 class="text-3xl font-extrabold mb-1">Когда летим?</h2>
-                    <p class="text-gray-500 dark:text-gray-400 mb-6 text-lg font-medium" id="selected-city-text"></p>
-                    <div id="dates-list" class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3"></div>
+                <div class="p-4 bg-white dark:bg-gray-800 shrink-0">
+                    <span class="block text-xl font-bold">${city}</span>
                 </div>
+            `;
+            btn.onclick = () => selectCity(city);
+            list.appendChild(btn);
+        });
+    } catch (e) { list.innerHTML = '<p class="text-red-500 font-bold">Ошибка загрузки</p>'; }
+}
 
-                <div id="step3" class="step hidden">
-                    <button onclick="goToStep(2)" class="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white mb-2 font-bold flex items-center gap-2 w-max transition-colors">← Назад к датам</button>
-                    <h2 class="text-2xl font-extrabold mb-1">Настройте цену</h2>
-                    <p class="text-gray-500 dark:text-gray-400 mb-4 text-base font-medium" id="selected-date-text"></p>
+function selectCity(city) {
+    selectedCity = city;
+    document.getElementById('selected-city-text').innerText = `Москва → ${city}`;
+    goToStep(2);
+    loadDates(city);
+}
 
-                    <div class="bg-white/60 dark:bg-gray-800/60 p-5 rounded-2xl border border-white/50 dark:border-gray-700 mb-4 shrink-0 shadow-sm">
-                        <div class="flex gap-4 items-center mb-6 max-w-4xl">
-                            <div class="relative w-36 shrink-0">
-                                <input type="number" id="price" value="5000" min="1000" max="20000" step="100" required class="w-full p-3 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-2xl font-extrabold text-center outline-none focus:border-yellow-400 transition-colors pr-8 shadow-inner text-gray-900 dark:text-white">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₽</span>
-                            </div>
-                            <div class="w-full relative pt-2 flex-1">
-                                <input type="range" id="price-slider" min="1000" max="20000" step="100" value="5000" class="w-full custom-slider">
-                                <div class="flex justify-between text-xs text-gray-400 mt-2 font-bold px-1"><span>1 000 ₽</span><span>20 000 ₽</span></div>
-                            </div>
-                            <button onclick="getOptimalPrice()" id="btn-optimal" class="shrink-0 bg-gray-900 dark:bg-yellow-400 text-white dark:text-black px-5 py-3 rounded-xl text-sm font-bold hover:bg-gray-700 dark:hover:bg-yellow-300 transition-all shadow-md flex items-center gap-2">✨ Оптимальная цена</button>
-                        </div>
-                        <div class="grid grid-cols-4 gap-4">
-                            <div class="bg-white/80 dark:bg-gray-900/80 p-3 rounded-xl border border-white dark:border-gray-700 text-center shadow-sm"><span class="block text-sm text-gray-500 font-bold">Мест:</span><strong id="resSeats" class="text-3xl font-extrabold">0</strong></div>
-                            <div class="bg-white/80 dark:bg-gray-900/80 p-3 rounded-xl border border-white dark:border-gray-700 text-center shadow-sm"><span class="block text-sm text-gray-500 font-bold">Хотят:</span><strong id="resWant" class="text-3xl font-extrabold text-blue-600 dark:text-blue-400">0</strong></div>
-                            <div class="bg-white/80 dark:bg-gray-900/80 p-3 rounded-xl border border-white dark:border-gray-700 text-center shadow-sm"><span class="block text-sm text-gray-500 font-bold">Купят:</span><strong id="resBuy" class="text-3xl font-extrabold">0</strong></div>
-                            <div class="bg-yellow-400 p-3 rounded-xl text-center shadow-md"><span class="block text-sm text-black font-bold">Ожид. прибыль (0.5):</span><strong id="resProfit" class="text-3xl font-extrabold text-black">0 ₽</strong></div>
-                        </div>
-                    </div>
+async function loadDates(city) {
+    const list = document.getElementById('dates-list');
+    list.innerHTML = '<p class="text-gray-400 font-medium col-span-full">Загрузка...</p>';
+    try {
+        const res = await fetch('/api/dates/' + encodeURIComponent(city));
+        const dates = await res.json();
+        list.innerHTML = '';
+        dates.forEach(d => {
+            const btn = document.createElement('button');
+            btn.className = 'choice-btn p-3 rounded-xl flex flex-col items-center justify-center bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-yellow-400 hover:shadow-md transition-all';
+            const dateObj = new Date(d);
+            const day = dateObj.getDate();
+            const month = dateObj.toLocaleDateString('ru-RU', { month: 'short' });
+            const weekday = dateObj.toLocaleDateString('ru-RU', { weekday: 'short' });
+            btn.innerHTML = `
+                <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">${weekday}</span>
+                <span class="text-2xl font-extrabold leading-none mb-1">${day}</span>
+                <span class="text-sm font-bold text-gray-500">${month}</span>
+            `;
+            btn.onclick = () => selectDate(d, dateObj);
+            list.appendChild(btn);
+        });
+    } catch (e) { list.innerHTML = '<p class="text-red-500 font-bold">Ошибка</p>'; }
+}
 
-                    <div class="relative w-full bg-white/50 dark:bg-gray-800/50 rounded-2xl border border-white dark:border-gray-700 p-4" style="height: 450px;">
-                        <button onclick="openChartModal()" class="absolute top-4 right-4 z-10 bg-gray-900 dark:bg-yellow-400 text-white dark:text-black px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-700 dark:hover:bg-yellow-300 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">🔍 На весь экран</button>
-                        <div id="demandChart" class="w-full" style="height: 400px;"></div>
-                    </div>
-                </div>
+function selectDate(dateIso, dateObj) {
+    selectedDate = dateIso;
+    document.getElementById('selected-date-text').innerText = `Москва → ${selectedCity}, ${dateObj.toLocaleDateString('ru-RU')}`;
+    goToStep(3);
+    calculate();
+}
 
-            </div>
-        </div>
-    </div>
+async function calculate() {
+    const token = localStorage.getItem('token');
+    const price = parseFloat(document.getElementById('price').value);
+    try {
+        const res = await fetch('/api/forecast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ origin: "Москва", destination: selectedCity, date: selectedDate, price: price })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('resSeats').innerText = data.seats;
+            document.getElementById('resWant').innerText = data.want_to_buy;
+            document.getElementById('resBuy').innerText = data.will_buy;
+            document.getElementById('resProfit').innerText = data.profit.toLocaleString('ru-RU') + ' ₽';
+            currentData = data;
+            renderChart(data, 'demandChart', false);
+            if (!document.getElementById('chartModal').classList.contains('hidden')) {
+                renderChart(data, 'fullChart', true);
+            }
+        }
+    } catch (error) { console.error("Ошибка соединения"); }
+}
 
-    <!-- МОДАЛЬНОЕ ОКНО ГРАФИКА -->
-    <div id="chartModal" class="fixed inset-0 z-50 hidden flex-col p-4 modal-backdrop">
-        <div class="bg-white dark:bg-gray-900 w-full h-full rounded-3xl p-6 relative flex flex-col shadow-2xl" style="animation: slideUp 0.3s ease-out;">
-            <div class="flex justify-between items-center mb-4 shrink-0">
-                <h2 class="text-3xl font-extrabold">Распределение спроса</h2>
-                <button onclick="closeChartModal()" class="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-3xl font-bold text-gray-500 hover:bg-red-100 hover:text-red-500 transition-colors">&times;</button>
-            </div>
+function scheduleCalculate() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(calculate, 150);
+}
 
-            <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 mb-4 shrink-0 max-w-4xl">
-                <div class="flex gap-4 items-center">
-                    <div class="relative w-36 shrink-0">
-                        <input type="number" id="price-modal" value="5000" min="1000" max="20000" step="100" class="w-full p-3 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-2xl font-extrabold text-center outline-none focus:border-yellow-400 pr-8 shadow-sm">
-                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₽</span>
-                    </div>
-                    <div class="w-full relative pt-2 flex-1">
-                        <input type="range" id="price-slider-modal" min="1000" max="20000" step="100" value="5000" class="w-full custom-slider">
-                    </div>
-                    <button onclick="getOptimalPrice()" id="btn-optimal-modal" class="shrink-0 bg-gray-900 dark:bg-yellow-400 text-white dark:text-black px-5 py-3 rounded-xl text-sm font-bold hover:bg-gray-700 dark:hover:bg-yellow-300 transition-all shadow-md flex items-center gap-2">✨ Оптимальная цена</button>
-                </div>
-            </div>
+async function getOptimalPrice() {
+    const token = localStorage.getItem('token');
+    const btn1 = document.getElementById('btn-optimal');
+    const btn2 = document.getElementById('btn-optimal-modal');
 
-            <div class="w-full relative" style="height: 500px;">
-                <div id="fullChart" class="w-full h-full"></div>
-            </div>
-        </div>
-    </div>
+    if(btn1) { btn1.innerHTML = '⏳ Считаем...'; btn1.disabled = true; }
+    if(btn2) { btn2.innerHTML = '⏳ Считаем...'; btn2.disabled = true; }
 
-    <!-- КРАСИВОЕ МОДАЛЬНОЕ ОКНО (С ПОДДЕРЖКОЙ ТЕМНОЙ ТЕМЫ) -->
-    <div id="infoModal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div id="infoModalContent" class="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-8 rounded-3xl max-w-sm w-full mx-4 text-center shadow-2xl transform scale-90 transition-all duration-300 border border-gray-100 dark:border-gray-700">
-            <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-500 dark:text-green-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div>
-            <h3 id="infoModalTitle" class="text-2xl font-bold mb-2">Успех</h3>
-            <p id="infoModalMessage" class="text-gray-500 dark:text-gray-400 mb-6 text-lg">Сообщение</p>
-            <button onclick="closeInfoModal()" class="w-full py-3 bg-yellow-400 hover:bg-yellow-300 text-black rounded-xl font-bold transition-all shadow-md">ОК</button>
-        </div>
-    </div>
+    try {
+        const res = await fetch('/api/optimal_price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ origin: "Москва", destination: selectedCity, date: selectedDate })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('price').value = data.optimal_price;
+            document.getElementById('price-slider').value = data.optimal_price;
+            document.getElementById('price-modal').value = data.optimal_price;
+            document.getElementById('price-slider-modal').value = data.optimal_price;
+            calculate();
+            showToast(`Рекомендуемая цена: ${data.optimal_price} ₽. Ожидаемая прибыль: ${data.expected_profit.toLocaleString('ru-RU')} ₽`);
+        } else {
+            showToast("Ошибка: " + data.detail, true);
+        }
+    } catch (e) {
+        showToast("Ошибка соединения", true);
+    } finally {
+        if(btn1) { btn1.innerHTML = '✨ Оптимальная цена'; btn1.disabled = false; }
+        if(btn2) { btn2.innerHTML = '✨ Оптимальная цена'; btn2.disabled = false; }
+    }
+}
 
-    <div id="toast-container" class="fixed bottom-10 right-10 z-[100] flex flex-col gap-3 pointer-events-none"></div>
+// ===== ГРАФИК С ПРИБЫЛЬЮ =====
+function renderChart(data, containerId, isFull) {
+    if (typeof ApexCharts === 'undefined') return;
+    const labels = [], wantData = [], buyData = [], profitData = [];
 
-    <script src="script.js"></script>
-</body>
-</html>
+    for (let key in data.quantiles) {
+        labels.push('Сценарий ' + key);
+        wantData.push(data.quantiles[key].want);
+        buyData.push(data.quantiles[key].buy);
+        profitData.push(data.quantiles[key].profit / 1000);
+    }
+
+    if (containerId === 'demandChart' && chartInstance) chartInstance.destroy();
+    if (containerId === 'fullChart' && modalChart) modalChart.destroy();
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#F4F4F4' : '#333333';
+
+    const options = {
+        chart: {
+            type: 'line',
+            height: isFull ? '100%' : 400, 
+            width: '100%',
+            fontFamily: 'Inter',
+            toolbar: { show: false },
+
+            fontFamily: 'Inter',
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 800 },
+            zoom: { enabled: false },
+            selection: { enabled: false },
+            background: 'transparent'
+        },
+        series: [
+            { name: 'Хотят купить (чел.)', type: 'area', data: wantData },
+            { name: 'Купят (чел.)', type: 'line', data: buyData },
+            { name: 'Прибыль (тыс. ₽)', type: 'line', data: profitData, yaxis: 1 }
+        ],
+        colors: ['#facc15', isDark ? '#9ca3af' : '#111827', '#10b981'],
+        stroke: { curve: 'smooth', width: isFull ? 4 : 3, dashArray: [0, 5, 0] },
+        fill: { type: ['gradient', 'solid', 'solid'], gradient: { opacityFrom: 0.5, opacityTo: 0.1 } },
+        dataLabels: { enabled: false },
+        xaxis: {
+            categories: labels,
+            labels: { style: { fontWeight: 600, colors: textColor } }
+        },
+        yaxis: [
+            {
+                min: 0,
+                title: { text: 'Пассажиры', style: { fontWeight: 600, color: textColor } },
+                labels: { style: { fontWeight: 600, colors: textColor }, formatter: function(val) { return Math.round(val); } }
+            },
+            {
+                opposite: true,
+                title: { text: 'Прибыль (тыс. ₽)', style: { fontWeight: 600, color: '#10b981' } },
+                labels: { style: { fontWeight: 600, colors: '#10b981' }, formatter: function(val) { return Math.round(val); } }
+            }
+        ],
+        legend: {
+            show: true,
+            position: 'bottom',
+            horizontalAlign: 'center',
+            fontWeight: 600,
+            fontSize: isFull ? '16px' : '14px',
+            markers: { size: 6 },
+            itemMargin: { horizontal: 10, vertical: 10 },
+            onItemClick: { toggleDataSeries: true },
+            onItemHover: { highlightDataSeries: true },
+            labels: { colors: textColor }
+        },
+        tooltip: {
+            enabled: true,
+            theme: isDark ? 'dark' : 'light',
+            style: { fontSize: '14px', fontFamily: 'Inter' },
+            y: {
+                formatter: function (val, { seriesIndex }) {
+                    return seriesIndex === 2 ? val.toFixed(1) + " тыс. ₽" : Math.round(val) + " чел.";
+                }
+            }
+        },
+        grid: { borderColor: isDark ? '#374151' : '#f3f4f6', strokeDashArray: 4 }
+    };
+
+    if (containerId === 'demandChart') {
+        chartInstance = new ApexCharts(document.querySelector('#demandChart'), options);
+        chartInstance.render();
+    } else {
+        modalChart = new ApexCharts(document.querySelector('#fullChart'), options);
+        modalChart.render();
+    }
+}
+
+function openChartModal() {
+    if (!currentData) return;
+    document.getElementById('price-modal').value = document.getElementById('price').value;
+    document.getElementById('price-slider-modal').value = document.getElementById('price').value;
+    document.getElementById('chartModal').classList.remove('hidden');
+    setTimeout(() => renderChart(currentData, 'fullChart', true), 150);
+}
+
+function closeChartModal() {
+    document.getElementById('chartModal').classList.add('hidden');
+    if (modalChart) { modalChart.destroy(); modalChart = null; }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const token = localStorage.getItem('token');
+    if (token) showMain(); else showAuth();
+
+    const priceInput = document.getElementById('price');
+    const priceSlider = document.getElementById('price-slider');
+    priceSlider.addEventListener('input', (e) => { priceInput.value = e.target.value; scheduleCalculate(); });
+    priceInput.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value);
+        if (val >= 1000 && val <= 20000) priceSlider.value = val;
+        scheduleCalculate();
+    });
+
+    const priceModal = document.getElementById('price-modal');
+    const priceSliderModal = document.getElementById('price-slider-modal');
+    priceSliderModal.addEventListener('input', (e) => {
+        priceModal.value = e.target.value; priceInput.value = e.target.value; priceSlider.value = e.target.value; scheduleCalculate();
+    });
+    priceModal.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value);
+        if (val >= 1000 && val <= 20000) priceSliderModal.value = val;
+        priceInput.value = e.target.value; priceSlider.value = e.target.value; scheduleCalculate();
+    });
+});
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const u = document.getElementById('login-username').value, p = document.getElementById('login-password').value;
+    const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
+    const data = await res.json();
+    if (res.ok) { localStorage.setItem('token', data.access_token); showMain(); }
+    else { document.getElementById('auth-error').innerText = data.detail; }
+});
+
+// ОБРАБОТЧИК РЕГИСТРАЦИИ С КРАСИВЫМ ОКНОМ
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const c = document.getElementById('reg-code').value;
+    const u = document.getElementById('reg-username').value;
+    const p = document.getElementById('reg-password').value;
+
+    const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_code: c, username: u, password: p })
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+        document.getElementById('reg-code').value = '';
+        document.getElementById('reg-username').value = '';
+        document.getElementById('reg-password').value = '';
+
+        // Показываем окно, переключение вкладки произойдет только после нажатия ОК
+        showInfoModal(
+            "Регистрация успешна!",
+            "Аккаунт создан. Теперь вы можете войти в систему.",
+            () => { switchTab('login'); }
+        );
+    }
+    else {
+        document.getElementById('auth-error').innerText = data.detail;
+    }
+});
