@@ -323,8 +323,11 @@ function renderChart(data, containerId, isFull) {
     const options = {
         chart: {
             type: 'line',
-            height: isFull ? 500 : 400,
+            height: isFull ? '100%' : 400, 
             width: '100%',
+            fontFamily: 'Inter',
+            toolbar: { show: false },
+
             fontFamily: 'Inter',
             toolbar: { show: false },
             animations: { enabled: true, easing: 'easeinout', speed: 800 },
