@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-pandas
-pydantic
-pytho
-n-multipart
-PyJWT
